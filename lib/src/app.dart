@@ -15,7 +15,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:file_picker/file_picker.dart';
+import 'file_picker_bridge.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
