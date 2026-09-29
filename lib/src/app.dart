@@ -11,13 +11,12 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:video_player/video_player.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'file_picker_bridge.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../domain/models.dart';
 import '../domain/gps_engine.dart';
@@ -31,3 +30,6 @@ part 'video_screen.dart';
 part 'outdoor_screen.dart';
 part 'progress_screen.dart';
 part 'settings_screen.dart';
+extension YoutubeLifecyclePause on YoutubePlayerController {
+  Future<void> pause() => pauseVideo();
+}
