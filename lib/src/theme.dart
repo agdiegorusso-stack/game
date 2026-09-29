@@ -8,7 +8,7 @@ final forgeTheme=ThemeData(useMaterial3:true, brightness:Brightness.dark, scaffo
 class FCard extends StatelessWidget {
   final Widget child; final EdgeInsetsGeometry padding; final Color? color;
   const FCard({super.key,required this.child,this.padding=const EdgeInsets.all(18),this.color});
-  @override Widget build(BuildContext context)=>Container(padding:padding,decoration:BoxDecoration(color:color??panel,borderRadius:BorderRadius.circular(22),border:Border.all(color:Colors.white.withValues(alpha:.07))),child:child);
+  @override Widget build(BuildContext context)=>Material(color:color??panel,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22),side:BorderSide(color:Colors.white.withValues(alpha:.07))),clipBehavior:Clip.antiAlias,child:Padding(padding:padding,child:child));
 }
 class SectionTitle extends StatelessWidget {
   final String title; final String? subtitle; final Widget? trailing;
