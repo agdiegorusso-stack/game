@@ -20,13 +20,31 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.5'
           channel: stable
           cache: true
-      - name: Prepare sword programme and private artwork slot
-        run: python3 tool/upgrade_dojo.py
+      - name: Prepare existing Dojo version
+        run: |
+          mkdir -p build-report
+          python3 tool/upgrade_dojo.py
+          flutter pub get
+      - name: Reproduce the previous scroll-state crash
+        shell: bash
+        run: |
+          set +e
+          flutter test test/scroll_state_test.dart --plain-name 'Dojo footer scroll 360' --reporter expanded 2>&1 | tee build-report/regression-before.log
+          RESULT=${PIPESTATUS[0]}
+          set -e
+          if [ "$RESULT" -eq 0 ]; then
+            echo 'Expected pre-fix failure was not reproduced.'
+            exit 1
+          fi
+          grep -E "double.*bool|bool.*double" build-report/regression-before.log
+      - name: Isolate disclosure states from page scroll offsets
+        run: python3 tool/fix_scroll_state.py
       - name: Analyze test and build native Flutter APK
         run: bash tool/build_android.sh
-      - name: Collect local packaging tools and reproducible sources
+      - name: Collect local packaging tools and sources
         if: always()
         run: |
           mkdir -p dist/packaging
