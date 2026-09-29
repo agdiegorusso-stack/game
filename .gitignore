@@ -1,0 +1,10 @@
+.dart_tool/
+.pub-cache/
+build/
+dist/
+build-report/
+android/
+*.iml
+*.jks
+*.keystore
+local.properties

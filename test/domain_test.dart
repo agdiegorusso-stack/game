@@ -1,0 +1,42 @@
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zoro_forge/domain/models.dart';
+import 'package:zoro_forge/domain/gps_engine.dart';
+void main(){
+  late Catalog catalog;
+  setUpAll(()=>catalog=Catalog.decode(File('assets/catalog.json').readAsStringSync()));
+  test('Catalog has 25 exercises and valid program references',(){expect(catalog.exercises.length,25);for(final p in catalog.programs.values){for(final id in p['ids']){expect(catalog.exercises.containsKey(id),isTrue);}}});
+  test('Every strength exercise has a real film reference',(){for(final code in ['A','B','C']){for(final id in catalog.programs[code]!['ids']){expect(catalog.exercises[id]!.videos.any((v)=>v['type']=='youtube'),isTrue,reason:id);}}});
+  test('Numbers accept comma and reject nonfinite inputs',(){expect(number('72,5'),72.5);expect(number('NaN'),isNull);expect(number('Infinity'),isNull);});
+  test('A blank set is never completed',(){final s=SetLog();expect(s.done,isFalse);expect(s.validate(catalog.exercises['pressa']!),isNotNull);});
+  test('Walking has time but no fictitious weight',(){final e=catalog.exercises['walk']!,s=SetLog(value:20);expect(e.timed,isTrue);expect(e.hasLoad,isFalse);expect(s.validate(e),isNull);});
+  test('Loads must be entered for loaded exercises',(){expect(SetLog(value:10).validate(catalog.exercises['chest']!),isNotNull);expect(SetLog(kg:20,value:10).validate(catalog.exercises['chest']!),isNull);});
+  test('Bodyweight squat allows zero extra load',(){expect(SetLog(kg:0,value:10).validate(catalog.exercises['squatbox']!),isNull);});
+  test('A partial workout cannot count as complete',(){final w=Workout(program:'A',phase:0,exercises:[ExerciseLog(exerciseId:'chest',rest:90,sets:[SetLog(value:10,kg:20,completed:DateTime.now()),SetLog()])]);expect(w.doneCount,1);expect(w.complete,isFalse);});
+  test('Skipped exercises prevent complete label',(){final e=ExerciseLog(exerciseId:'chest',rest:90,skipped:true,sets:[SetLog(value:10,kg:20,completed:DateTime.now())]);expect(e.complete,isFalse);expect(e.doneCount,1);});
+  test('Undo check removes completion',(){final s=SetLog(value:12,completed:DateTime.now());s.completed=null;expect(s.done,isFalse);});
+  test('Progression requires two complete consistent sessions',(){final e=catalog.exercises['chest']!;ExerciseLog make()=>ExerciseLog(exerciseId:e.id,rest:e.rest,technique:true,sets:List.generate(2,(_)=>SetLog(kg:20,value:e.max,rir:2,completed:DateTime.now())));final a=make(),b=make();expect(canProgress(e,[a],2),isFalse);expect(canProgress(e,[a,b],2),isTrue);b.technique=false;expect(canProgress(e,[a,b],2),isFalse);b.technique=true;b.sets.first.kg=25;expect(canProgress(e,[a,b],2),isFalse);});
+  test('Progression rejects missing RIR or changed count',(){final e=catalog.exercises['chest']!;final a=ExerciseLog(exerciseId:e.id,rest:90,technique:true,sets:[SetLog(kg:20,value:12,completed:DateTime.now())]);expect(canProgress(e,[a,a],1),isFalse);a.sets.first.rir=3;expect(canProgress(e,[a,a],2),isFalse);});
+  test('YouTube parsing is domain restricted',(){expect(youtubeId('https://www.youtube.com/watch?v=9RK9UUgKIQE'),'9RK9UUgKIQE');expect(youtubeId('https://youtu.be/9RK9UUgKIQE'),'9RK9UUgKIQE');expect(youtubeId('https://evil.example/watch?v=9RK9UUgKIQE'),isNull);expect(youtubeId('javascript:alert(1)'),isNull);});
+  test('Profile round trip',(){final p=Profile(phase:2,weekdays:[1,3,5],started:DateTime(2026,1,1));final q=Profile.fromJson(p.toJson());expect(q.phase,2);expect(q.started,p.started);expect(q.weekdays,[1,3,5]);});
+  test('Workout preserves actual checks',(){final w=Workout(program:'A',phase:0,exercises:[ExerciseLog(exerciseId:'pressa',rest:120,sets:[SetLog(value:10,kg:40,rir:3,completed:DateTime(2026,1,1))])]);expect(Workout.fromJson(w.toJson()).toJson(),w.toJson());});
+  test('Formatting does not invent pace',(){expect(pace(0,100),'—');expect(pace(1000,360),'6:00');expect(clock(3661),'1:01:01');});
+  group('GPS filtering and pause',(){
+    final start=DateTime.utc(2026,1,1,12);
+    TrackPoint? add(GpsEngine e,{int sec=0,double lat=41,double lon=12,double accuracy=4,double speed=2,bool mocked=false,int? age})=>e.add(lat:lat,lon:lon,accuracy:accuracy,timestamp:start.add(Duration(seconds:sec)),now:start.add(Duration(seconds:sec+(age??0))),elapsed:sec,speed:speed,speedAccuracy:.3,mocked:mocked);
+    test('First fix anchors without distance',(){final e=GpsEngine();expect(add(e),isNotNull);expect(e.meters,0);expect(e.points.length,1);});
+    test('Haversine baseline',(){expect(distanceMeters(0,0,0,.001),closeTo(111.195,.01));});
+    test('Movement credits real points',(){final e=GpsEngine();add(e);add(e,sec:5,lat:41.0001);expect(e.meters,closeTo(11.12,.1));});
+    test('Poor stale and mock fixes ignored',(){final e=GpsEngine();expect(add(e,accuracy:50),isNull);expect(add(e,age:30),isNull);expect(add(e,mocked:true),isNull);expect(e.points,isEmpty);});
+    test('Stationary drift does not accumulate',(){final e=GpsEngine();add(e);for(var i=1;i<30;i++){add(e,sec:i,lat:41+i*.000001,speed:0);}expect(e.meters,0);});
+    test('Teleport ignored',(){final e=GpsEngine();add(e);expect(add(e,sec:2,lat:42),isNull);expect(e.meters,0);});
+    test('Pause does not bridge distance',(){final e=GpsEngine();add(e);e.breakSegment();add(e,sec:20,lat:42);expect(e.meters,0);expect(e.points.last.segment,isNot(e.points.first.segment));});
+    test('Signal gap breaks route',(){final e=GpsEngine();add(e);add(e,sec:30,lat:41.001);expect(e.meters,0);expect(e.points.last.segment,1);});
+    test('Duplicate timestamp ignored',(){final e=GpsEngine();add(e);expect(add(e,lat:41.0001),isNull);expect(e.points.length,1);});
+    test('NaN rejected',(){final e=GpsEngine();expect(add(e,lat:double.nan),isNull);});
+    test('Restore starts a new segment',(){final e=GpsEngine();add(e);add(e,sec:5,lat:41.0001);final distance=e.meters;final recovered=GpsEngine(points:List.of(e.points),meters:distance);add(recovered,sec:10,lat:42);expect(recovered.meters,distance);expect(recovered.points.last.segment,1);});
+    test('GPX preserves segments',(){final r=RunRecord(mode:'walk',started:start,points:[TrackPoint(lat:41,lon:12,accuracy:3,time:start,segment:0,elapsed:0),TrackPoint(lat:42,lon:12,accuracy:3,time:start.add(const Duration(minutes:3)),segment:1,elapsed:1)]);final xml=toGpx(r);expect(RegExp('<trkseg>').allMatches(xml).length,2);expect(xml,contains('version="1.1"'));});
+    test('Empty route has no fake coordinates',(){expect(toGpx(RunRecord(mode:'run')),isNot(contains('<trkpt')));});
+    test('Kilometer split uses active time',(){final points=[TrackPoint(lat:0,lon:0,accuracy:3,time:start,segment:0,elapsed:0),TrackPoint(lat:0,lon:.01,accuracy:3,time:start.add(const Duration(seconds:600)),segment:0,elapsed:600)];final split=kilometerSplits(points);expect(split.length,1);expect(split.first.seconds,closeTo(540,2));});
+  });
+}
