@@ -11,7 +11,7 @@ concurrency:
 jobs:
   android:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -22,15 +22,20 @@ jobs:
         with:
           channel: stable
           cache: true
-      - name: Flutter version
-        run: flutter --version
-      - name: Build project when sources are ready
+      - name: Prepare sword programme and private artwork slot
+        run: python3 tool/upgrade_dojo.py
+      - name: Analyze test and build native Flutter APK
+        run: bash tool/build_android.sh
+      - name: Collect local packaging tools and reproducible sources
+        if: always()
         run: |
-          if [ ! -f tool/build_android.sh ]; then
-            echo 'Compiler ready; source upload in progress.'
-            exit 0
-          fi
-          bash tool/build_android.sh
+          mkdir -p dist/packaging
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          cp "$BT/lib/apksigner.jar" dist/packaging/apksigner.jar
+          cp "$BT/zipalign" dist/packaging/zipalign
+          cp "$BT/aapt" dist/packaging/aapt
+          if [ -d "$BT/lib64" ]; then cp -r "$BT/lib64" dist/packaging/; fi
+          zip -qr dist/source.zip lib assets test tool android_overlay pubspec.yaml pubspec.lock analysis_options.yaml
       - name: Collect APK and verification reports
         if: always()
         uses: actions/upload-artifact@v4
