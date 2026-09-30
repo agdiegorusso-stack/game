@@ -1,18 +1,20 @@
 # Voce — assistente LinkedIn personale
 
-Prima versione Flutter per **Android**, personalizzata sul dossier editoriale di Diego Russo. Versione 0.1.0, 30 settembre 2026. App indipendente, non affiliata a LinkedIn.
+Prima versione Flutter per **Android**, personalizzata sul dossier editoriale di Diego Russo. Versione 0.1.1, 30 settembre 2026. App indipendente, non affiliata a LinkedIn.
 
 ## Stato reale della consegna
 
-Il pacchetto contiene codice Flutter, integrazione Android, server Python, test e istruzioni. **Non contiene un APK**: in questo ambiente mancano l’SDK Android e le dipendenze Flutter scaricabili. Non è una connessione già attiva all’account LinkedIn. La UI Android e la cifratura nativa devono ancora essere provate su emulatore/dispositivo.
+**APK Android ARM64 compilato e verificato su GitHub Actions.** Il [run riuscito](https://github.com/agdiegorusso-stack/game/actions/runs/36714581170) include il file `Voce-0.1.1-Android-arm64.apk` (17,6 MB), checksum e verifica della firma. Richiede Android 7.0 o successivo. Build release ottimizzata con firma debug per prove personali.
 
-Sono stati eseguiti i test Python e della logica Dart; vedi `docs/VERIFICHE.md`. L’accesso live a LinkedIn e all’AI non è stato provato perché non sono presenti credenziali. I test del servizio usano risposte simulate esplicitamente.
+Sono superati analisi Flutter, quattro test dell’interfaccia, nove controlli della logica Dart e undici test Python. Le quattro schermate sono state renderizzate e controllate visivamente nei widget test; vedi `docs/VERIFICHE.md`.
+
+**AI e collegamento LinkedIn non sono ancora attivi:** occorre configurare il backend e le proprie credenziali. Installazione, archivio cifrato e condivisione vanno provati sul telefono. Non sono state eseguite chiamate live a LinkedIn o all’AI. Il radar lavora sui post importati.
 
 ## Le tre funzioni
 
 | Sezione | Implementazione | Cosa serve |
 |---|---|---|
-| Risposte | Commenti con post originale, coda da gestire/gestiti, generazione di risposte, modifica e copia. Polling sul server dei post registrati, deduplicazione, lettura delle repliche dirette, errori visibili. | Importazione manuale subito dopo la compilazione. Per la lettura automatica servono permessi LinkedIn già approvati e URN dei post. Per generare serve l’AI configurata. |
+| Risposte | Commenti con post originale, coda da gestire/gestiti, generazione di risposte, modifica e copia. Polling sul server dei post registrati, deduplicazione, lettura delle repliche dirette, errori visibili. | Importazione manuale subito dopo l’installazione. Per la lettura automatica servono permessi LinkedIn già approvati e URN dei post. Per generare serve l’AI configurata. |
 | Studio | Post coerenti con profilo e voce, istruzioni per singola bozza, estratti delle fonti, esempi approvati, archivio bozze. | Server e chiave API AI. I link da soli non vengono aperti; fornire il testo delle fonti. |
 | Radar | Ordinamento dei post importati per temi, recenza, numero di commenti e quantità di contesto. Spiegazione del punteggio, filtro e proposta di commento. | Condividere o incollare i post dal feed. Il feed LinkedIn personale **non viene letto automaticamente**. |
 
@@ -26,12 +28,12 @@ Toolchain di riferimento: Flutter **3.47.5**, JDK 17 e Android SDK configurato c
 flutter pub get
 flutter analyze
 flutter test test/widget_test.dart
-flutter build apk --debug
+flutter build apk --release --target-platform android-arm64
 ```
 
-APK atteso: `build/app/outputs/flutter-apk/app-debug.apk`. Installarlo con `adb install -r build/app/outputs/flutter-apk/app-debug.apk` oppure aprirlo sul telefono. La firma debug serve per prove personali; configurare una firma release propria prima di distribuire. La configurazione generata di release usa ancora la firma debug.
+APK: `build/app/outputs/flutter-apk/app-release.apk`. Installarlo con `adb install -r build/app/outputs/flutter-apk/app-release.apk` oppure aprirlo sul telefono. La firma debug serve per prove personali; configurare una firma release propria prima di distribuire. La configurazione generata di release usa ancora la firma debug.
 
-Per una compilazione su GitHub, caricare il progetto in un proprio repository e avviare manualmente il workflow **Android checks and APK**. Questo pacchetto non ha creato repository e non ha avviato build remote. Il workflow compila solo se analisi e test passano e salva l’APK come artifact del run.
+Il progetto è nel repository [agdiegorusso-stack/game](https://github.com/agdiegorusso-stack/game/tree/voce/flutter-apk/voce), ramo `voce/flutter-apk`, cartella `voce/`. Il workflow **Voce Flutter APK** parte a ogni modifica del progetto su questo ramo e si può avviare manualmente. Compila solo se analisi e test passano e salva l’APK ARM64, il checksum e i rapporti di verifica come artifact del run. Il ramo principale del repository resta separato.
 
 ## Attivare il servizio AI
 

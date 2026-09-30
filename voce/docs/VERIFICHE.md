@@ -1,37 +1,41 @@
-# Verifiche — Voce 0.1.0
+# Verifiche — Voce 0.1.1
 
-Eseguite il 30 settembre 2026.
+Eseguite il 30 settembre 2026 con GitHub Actions, Flutter 3.47.5 e JDK 17.
 
-## Esito
+## Esito dei controlli
 
-- **11 test del backend Python superati**, incluso un test HTTP locale: autenticazione, limiti dei payload, assenza di endpoint di pubblicazione, accessi mancanti, validazione URL/URN, deduplicazione, conservazione dello stato gestito, invalidazione della bozza dopo una modifica, paginazione, repliche, scadenza dati, rimozione monitoraggio, rate limit, OAuth monouso/scaduto, scadenza token e scope concessi, formato AI, risposta automatica preparata una sola volta e consegnata nella coda.
-- **9 controlli Dart della logica superati**: ordinamento pertinente/recente, dati mancanti, date future, parole duplicate, host ingannevoli, credenziali in URL, link validi e controlli editoriali.
-- `dart format` completato su tutti i file Dart.
-- `dart analyze lib`: **No issues found**. Analisi effettuata collegando il codice alle librerie Flutter/sky_engine dell’SDK 3.47.5 disponibile; non equivale a una compilazione Android con tutte le dipendenze risolte da Pub.
-- XML Android, YAML e sintassi Python validati.
+- `flutter pub get`: completato.
+- `flutter analyze`: nessun problema rilevato.
+- **4 test dell’interfaccia superati**: avvio senza dati fittizi; importazione e rilettura di autore/testo dopo ricreazione dell’app; navigazione sulle quattro schermate a larghezze di 360 e 430 pixel senza overflow. La persistenza nei widget test usa un canale Android simulato.
+- **9 controlli Dart della logica superati**: ranking, dati mancanti, date future, parole duplicate, validazione degli indirizzi e controlli editoriali.
+- **11 test Python superati**, incluso un test HTTP locale: autenticazione, limiti dei payload, assenza di pubblicazione automatica, accessi mancanti, URL/URN, deduplicazione, stato gestito, invalidazione bozze, paginazione, repliche, scadenza dati, rimozione monitoraggio, rate limit, OAuth, scope, formato AI e risposta automatica preparata una sola volta.
+- `flutter build apk --release --target-platform android-arm64`: riuscito, inclusa compilazione Kotlin/Gradle.
+- Firma APK v2 verificata da `apksigner`; certificato Android Debug per uso di prova.
+- Pacchetto `it.diegorusso.voce_linkedin`, versione `0.1.1`, versionCode `2`, minSdk `24`, targetSdk `36`; sola ABI `arm64-v8a`.
+- File APK: 17.596.552 byte. Il checksum locale coincide con quello generato su GitHub.
+- Archivio Actions verificato contro il digest SHA256 fornito da GitHub. Controllate visivamente le quattro schermate renderizzate dai widget test con caratteri Roboto e icone Material.
 
-## Blocchi effettivamente osservati
+SHA256 APK: `876f8ea7140697dfc4afc660cc96f29ea4c2b20dad3af1d45894d1036d606d7b`.
 
-`flutter pub get --offline` non riesce: il pacchetto `leak_tracker_flutter_testing` richiesto da `flutter_test` non è nella cache. Il tentativo di contattare Pub dalla rete di esecuzione non ha raggiunto il servizio.
+SHA256 del certificato: `7df78618e941682024044fc8ab57c4317fa0ec7935769d05b9a33e8771e46896`.
 
-`flutter build apk --debug --no-pub` termina con **No Android SDK found**. Nessun APK è stato creato. Il pacchetto contiene il progetto sorgente; il file `.dart_tool/package_config.json` usato per l’analisi locale non è distribuito. Eseguire `flutter pub get` su un ambiente completo.
+Run: https://github.com/agdiegorusso-stack/game/actions/runs/36714581170
 
-## Non eseguito
+Commit del codice sottoposto ai controlli: `f1b0b8e2e98bc3580b63c81805d6d015f01f73b0`.
 
-- Compilazione Kotlin/Gradle e installazione su telefono/emulatore.
-- Esecuzione dei due widget test in `test/widget_test.dart` (inclusi per il prossimo ambiente completo).
-- Ispezione visiva delle schermate renderizzate e prova con tastiera, accessibilità e dimensioni diverse.
-- Android Keystore, riapertura dopo arresto del processo, condivisione a caldo/a freddo e apertura del browser su dispositivo.
-- API LinkedIn e OpenAI reali: credenziali e permessi non disponibili. Le risposte remote nei test sono simulate, non traffico dell’account di Diego.
-- Deploy Docker/Caddy, HTTPS pubblico e workflow GitHub: inclusi come configurazione, non attivati.
+## Da verificare sul telefono e con i servizi reali
 
-## Prova da completare prima dell’uso abituale
+- Installazione, Android Keystore, riapertura dopo arresto del processo, tastiera, accessibilità e condivisione Android a caldo/a freddo. I test di persistenza dell’interfaccia non sostituiscono una prova dell’archivio nativo.
+- API LinkedIn e AI reali: credenziali e permessi non disponibili. Le risposte remote nei test sono simulate.
+- Distribuzione del backend, DNS, HTTPS e collegamento dell’app al server.
 
-1. `flutter pub get`, `flutter analyze`, `flutter test test/widget_test.dart`, `flutter build apk --debug`.
-2. Aprire app vuota, importare un post e un commento, chiudere/riaprire e verificare che i testi restino.
-3. Provare Condividi da LinkedIn (link solo e link+testo), modifica bozza, salvataggio, copia e ritorno da LinkedIn. La copia non deve pubblicare o contrassegnare automaticamente.
-4. Configurare il proprio server HTTPS e modello; generare una bozza e verificare il contesto inviato e il risultato.
-5. Solo se i permessi sono approvati: autorizzare LinkedIn, registrare un proprio post con URN corretto e verificare commento nuovo, replica, modifica, token scaduto e limite API.
-6. Provare la cancellazione e la scadenza del contenuto API; verificare la conservazione dei dati anche sul proprio hosting e nei backup.
+La firma debug è destinata a prove personali. Per aggiornamenti continuativi e distribuzione configurare una propria chiave di firma stabile: una nuova chiave generata dal runner non permette di aggiornare un’installazione firmata diversamente.
 
-Il superamento dei test offline non dimostra che LinkedIn abbia concesso l’accesso o che il servizio produca crescita di visibilità. La selezione del radar è un’euristica editoriale dichiarata nell’app.
+## Prima prova sul dispositivo
+
+1. Installare l’APK; importare un post e un commento, chiudere e riaprire l’app per verificare i testi salvati.
+2. Provare Condividi da LinkedIn, modifica, copia e ritorno al post. La copia non pubblica e non contrassegna automaticamente il contenuto.
+3. Configurare server HTTPS e modello AI; generare una bozza e controllare contesto e risultato.
+4. Solo con i permessi già approvati: collegare LinkedIn, registrare un post con URN corretto e controllare nuovi commenti, repliche, modifiche e scadenza del token.
+
+I test non attestano che LinkedIn abbia concesso l’accesso. Il radar ordina i post importati con un’euristica editoriale; non prevede crescita o impressioni.
