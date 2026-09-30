@@ -1,0 +1,30 @@
+services:
+  api:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      VOCE_HOST: 0.0.0.0
+      VOCE_DB: /app/data/voce.sqlite3
+    volumes:
+      - voce_data:/app/data
+    expose:
+      - '8787'
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      VOCE_DOMAIN: ${VOCE_DOMAIN:?Imposta VOCE_DOMAIN nel file .env}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./backend/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+volumes:
+  voce_data:
+  caddy_data:
+  caddy_config:

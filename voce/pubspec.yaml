@@ -1,0 +1,14 @@
+name: voce_linkedin
+description: Assistente editoriale personale per LinkedIn, con revisione umana.
+publish_to: none
+version: 0.1.1+2
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true

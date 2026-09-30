@@ -1,0 +1,15 @@
+.dart_tool/
+build/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+.env
+backend/data/
+__pycache__/
+*.pyc
+
+dist/
+build-report/
+.idea/
+*.iml
