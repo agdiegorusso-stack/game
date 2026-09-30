@@ -252,6 +252,9 @@ def main():
                     except NeedsUser as exc:
                         service.store.set('browser_state', {'state':exc.state,'at':time.time(),'message':str(exc)})
                         print(str(exc))
+                        if exc.state == 'paused' and args.command == 'run':
+                            next_run = 0
+                            continue
                         return
                     except Exception:
                         service.store.set('browser_state', {'state':'error','at':time.time(),'message':'Raccolta interrotta. Controlla il browser e riavvia il servizio.'})

@@ -581,6 +581,7 @@ class Service:
             if self.env.get('LINKEDIN_MODE') == 'browser':
                 if self.env.get('AUTO_DRAFT','false').lower() == 'true' and self.status()['ai']:
                     try:
+                        self.worker_error = ''
                         self.auto_draft()
                         self.auto_radar()
                     except Exception:

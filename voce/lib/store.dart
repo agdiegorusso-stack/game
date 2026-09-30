@@ -239,6 +239,24 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  Future<Json> preparedDraft(Json origin, String kind) async {
+    final id = 'prepared-$kind-${origin['id']}';
+    final version = jsonEncode([origin['text'], origin['parent_post'], origin['parent_comment']]);
+    final existing = drafts.where((d) => d['id'] == id && d['origin_version'] == version).firstOrNull;
+    if (existing != null) return existing;
+    final draft = <String, dynamic>{
+      ...Json.from(origin['draft']),
+      'id': id, 'kind': kind, 'origin_id': origin['id'], 'origin_version': version,
+      'created_at': DateTime.now().toIso8601String(),
+      'url': origin['url'] ?? '', 'source': origin['source'], 'state': 'bozza',
+      'expires_at': (origin['fetched_at'] as num) + 172800,
+    };
+    drafts.removeWhere((d) => d['id'] == id);
+    drafts.insert(0, draft);
+    await save();
+    return draft;
+  }
+
   Future<void> importItem(Json item, bool isComment) async {
     final target = isComment ? comments : posts;
     if (target.any(

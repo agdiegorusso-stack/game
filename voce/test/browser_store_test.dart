@@ -55,6 +55,13 @@ void main() {
     expect(store.posts.length, 2);
     expect(store.comments.last['draft']['text'], 'Verifico la fonte prima di usarli.');
     expect(store.posts.last['draft']['text'], 'Quale controllo fate alla fonte?');
+    final prepared = await store.preparedDraft(store.posts.last, 'comment');
+    prepared['text'] = 'Modifica personale';
+    expect((await store.preparedDraft(store.posts.last, 'comment'))['text'], 'Modifica personale');
+    store.posts.last['text'] = 'Il post è stato modificato';
+    store.posts.last['draft'] = {'text': 'Nuova bozza sul contenuto aggiornato'};
+    expect((await store.preparedDraft(store.posts.last, 'comment'))['text'], 'Nuova bozza sul contenuto aggiornato');
+    expect(store.drafts.length, 1);
     await store.mark(store.comments.last, true);
     expect(api.calls, contains('/v1/inbox/update'));
     final archive = jsonDecode(saved['workspace']!);

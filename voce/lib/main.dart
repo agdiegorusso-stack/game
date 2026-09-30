@@ -544,24 +544,8 @@ class CommentCard extends StatelessWidget {
                   ? null
                   : () => attempt(context, () async {
                       if (item['draft'] is Map) {
-                        final d = <String, dynamic>{
-                          ...Json.from(item['draft']),
-                          'kind': 'reply',
-                          'url': item['url'],
-                          'id': 'api-${item['id']}',
-                          'source': item['source'],
-                          'state': 'bozza',
-                          'expires_at': (item['fetched_at'] as num) + 172800,
-                        };
-                        final existing = store.drafts
-                            .where((x) => x['id'] == d['id'])
-                            .firstOrNull;
-                        if (existing == null) {
-                          store.drafts.insert(0, d);
-                          await store.save();
-                        }
-                        if (context.mounted)
-                          await showDraft(context, store, existing ?? d);
+                        final d = await store.preparedDraft(item, 'reply');
+                        if (context.mounted) await showDraft(context, store, d);
                       } else {
                         final draft = await store.generate(
                           'reply',
@@ -984,15 +968,7 @@ class _RadarPageState extends State<RadarPage> {
                           ? null
                           : () => attempt(context, () async {
                               final d = record.$1['draft'] is Map
-                                  ? <String, dynamic>{
-                                      ...Json.from(record.$1['draft']),
-                                      'id': 'browser-draft-${record.$1['id']}',
-                                      'kind': 'comment',
-                                      'url': record.$1['url'],
-                                      'source': record.$1['source'],
-                                      'state': 'bozza',
-                                      'expires_at': (record.$1['fetched_at'] as num) + 172800,
-                                    }
+                                  ? await s.preparedDraft(record.$1, 'comment')
                                   : await s.generate(
                                       'comment', record.$1['text'], origin: record.$1,
                                     );

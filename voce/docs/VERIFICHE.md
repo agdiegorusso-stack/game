@@ -12,7 +12,7 @@ Data: 30 settembre 2026.
 
 ## GitHub Actions
 
-Il workflow esegue analisi Flutter, test UI/archivio/sincronizzazione browser, controlli di ranking Dart e test Python prima di compilare l’APK. Salva le quattro anteprime UI, checksum e rapporto di firma. Fare riferimento al risultato del run del commit consegnato, non al precedente run 0.1.1.
+Nel run 36782885161 sono passati analisi Flutter, 6 test UI/archivio/sincronizzazione browser, 9 controlli di ranking Dart e 21 test Python prima della compilazione APK. Salva le quattro anteprime UI, checksum e rapporto di firma. Fare riferimento al risultato del run del commit consegnato, non al precedente run 0.1.1.
 
 ## Ancora da verificare sul dispositivo e computer di destinazione
 
