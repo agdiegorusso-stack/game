@@ -48,6 +48,10 @@ void main() {
   testWidgets('Importazione conserva testo e autore dopo riavvio', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(360, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const VoceApp());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Radar'));
@@ -89,7 +93,7 @@ void main() {
       for (final entry in {'Risposte': 'risposte', 'Studio': 'studio', 'Radar': 'radar', 'Profilo': 'profilo'}.entries) {
         await tester.tap(find.text(entry.key));
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
+        expect(tester.takeException(), isNull, reason: 'Schermata ${entry.key}, larghezza $width');
         if (width == 430) {
           await tester.runAsync(() async {
             final boundary = capture.currentContext!.findRenderObject() as RenderRepaintBoundary;

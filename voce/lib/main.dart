@@ -285,16 +285,20 @@ class Panel extends StatelessWidget {
   final Color color;
   const Panel({super.key, required this.child, this.color = Colors.white});
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 14),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Material(
       color: color,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: const Color(0xFFE1E7E0)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: Color(0xFFE1E7E0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(padding: const EdgeInsets.all(20), child: child),
+      ),
     ),
-    child: child,
   );
 }
 
@@ -430,6 +434,7 @@ class _InboxPageState extends State<InboxPage> {
           children: [
             Expanded(
               child: SegmentedButton<bool>(
+                showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(value: false, label: Text('Da gestire')),
                   ButtonSegment(value: true, label: Text('Gestiti')),
@@ -1105,9 +1110,10 @@ class _ImportSheetState extends State<ImportSheet> {
         ),
         const SizedBox(height: 12),
         SegmentedButton<bool>(
+          showSelectedIcon: false,
           segments: const [
             ButtonSegment(value: false, label: Text('Post del feed')),
-            ButtonSegment(value: true, label: Text('Commento ricevuto')),
+            ButtonSegment(value: true, label: Text('Commento')),
           ],
           selected: {comment},
           onSelectionChanged: (v) => setState(() => comment = v.first),
