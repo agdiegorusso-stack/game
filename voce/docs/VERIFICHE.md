@@ -12,7 +12,9 @@ Data: 30 settembre 2026.
 
 ## GitHub Actions
 
-Nel run 36782885161 sono passati analisi Flutter, 6 test UI/archivio/sincronizzazione browser, 9 controlli di ranking Dart e 21 test Python prima della compilazione APK. Salva le quattro anteprime UI, checksum e rapporto di firma. Fare riferimento al risultato del run del commit consegnato, non al precedente run 0.1.1.
+Nel run 36783249049 sono passati analisi Flutter, 6 test UI/archivio/sincronizzazione browser, 9 controlli di ranking Dart e 21 test Python prima della compilazione APK. Build completata con successo: [run 36783249049](https://github.com/agdiegorusso-stack/game/actions/runs/36783249049), commit `7aec74dce08142da00bce79c53c8842870b3d1d0`. APK 17.596.628 byte, SHA-256 `23efae916671d53794413e618075d6aa414cbdf29519c1ff9fa00adae5af276b`; firma APK v2 verificata. Android 7.0+, ARM64.
+
+La firma debug è diversa da 0.1.1: non è possibile aggiornare direttamente quella installazione. Salvare le bozze prima di disinstallare; l’archivio locale viene cancellato. Fare riferimento al risultato del run del commit consegnato, non al precedente run 0.1.1.
 
 ## Ancora da verificare sul dispositivo e computer di destinazione
 

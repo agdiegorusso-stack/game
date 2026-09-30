@@ -15,7 +15,7 @@ Il computer raccoglie e prepara le bozze anche con il telefono chiuso. L’app s
 
 Il lettore DOM è stato provato in una sessione LinkedIn autenticata: cinque post personali riconosciuti, due commenti ricevuti sul post più recente, feed e sponsorizzazioni distinguibili. Verificato anche il menu “Più recenti”. Sono prove di lettura, **non una verifica del servizio continuo su un computer di produzione**.
 
-Il backend supera 21 test automatici, con AI simulata. La build Android viene compilata e verificata da GitHub Actions. Non è stato configurato un server operativo né effettuata una chiamata AI a pagamento: installare l’APK da solo non attiva l’automazione. Occorrono computer/server, sessione LinkedIn dedicata e chiave API AI.
+Il backend supera 21 test automatici, con AI simulata. La build Android 0.2.0 è compilata e verificata: [run riuscito 36783249049](https://github.com/agdiegorusso-stack/game/actions/runs/36783249049), con 6 test Flutter e 9 controlli Dart oltre ai test Python. Non è stato configurato un server operativo né effettuata una chiamata AI a pagamento: installare l’APK da solo non attiva l’automazione. Occorrono computer/server, sessione LinkedIn dedicata e chiave API AI.
 
 ## Avvio sul proprio computer
 
