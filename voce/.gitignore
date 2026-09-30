@@ -13,3 +13,6 @@ dist/
 build-report/
 .idea/
 *.iml
+
+browser/private-profile/
+.venv/

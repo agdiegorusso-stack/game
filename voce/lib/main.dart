@@ -428,8 +428,8 @@ class _InboxPageState extends State<InboxPage> {
               const SizedBox(height: 12),
               Text(
                 s.status['comment_access'] == true
-                    ? 'Monitoraggio server abilitato per i post registrati. Verifica gli errori in Profilo.'
-                    : 'Monitoraggio LinkedIn non attivo. Importa i commenti oppure configura i permessi in Profilo.',
+                    ? (s.status['mode'] == 'browser' ? 'Commenti raccolti dal browser. Le risposte pronte compaiono qui; stato e copertura in Profilo.' : 'Monitoraggio server abilitato per i post registrati. Verifica gli errori in Profilo.')
+                    : 'Collega il raccoglitore in Profilo per trovare qui i commenti e le risposte preparate automaticamente.',
                 style: const TextStyle(color: Color(0xFFBED4CB), fontSize: 12),
               ),
             ],
@@ -463,7 +463,7 @@ class _InboxPageState extends State<InboxPage> {
                 ? 'Nessun commento gestito'
                 : 'La tua coda parte da qui',
             description:
-                'Aggiungi il testo di un commento e del tuo post: la risposta potrà tenere conto di entrambi.',
+                'I commenti raccolti dal browser compariranno qui. Verifica il collegamento in Profilo; puoi anche aggiungere un contenuto a mano.',
             icon: Icons.forum_outlined,
             action: FilledButton.icon(
               onPressed: () => showImport(context, s, true),
@@ -495,7 +495,9 @@ class CommentCard extends StatelessWidget {
           runSpacing: 8,
           children: [
             Tag(
-              item['source'] == 'linkedin_api'
+              item['source'] == 'linkedin_browser'
+                  ? 'DAL BROWSER'
+                  : item['source'] == 'linkedin_api'
                   ? 'LINKEDIN API'
                   : item['source'] == 'example'
                   ? 'ESEMPIO • NON REALE'
@@ -547,7 +549,7 @@ class CommentCard extends StatelessWidget {
                           'kind': 'reply',
                           'url': item['url'],
                           'id': 'api-${item['id']}',
-                          'source': 'linkedin_api',
+                          'source': item['source'],
                           'state': 'bozza',
                           'expires_at': (item['fetched_at'] as num) + 172800,
                         };
@@ -818,10 +820,10 @@ class _RadarPageState extends State<RadarPage> {
         const Heading(
           'RADAR',
           'Scegli dove\ncontribuire.',
-          'Ordina i post importati e prepara commenti pertinenti al tuo profilo.',
+          'I post selezionati per te, con il commento già pronto.',
         ),
-        const Panel(
-          color: Color(0xFFE8EFE6),
+        Panel(
+          color: const Color(0xFFE8EFE6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -829,7 +831,9 @@ class _RadarPageState extends State<RadarPage> {
               SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Il feed personale non viene letto automaticamente. Da LinkedIn condividi un post con Voce oppure incolla il contenuto. Se viene condiviso solo il link, aggiungi anche il testo.',
+                  s.status['feed_access'] == true
+                      ? 'Post raccolti dal tuo feed e ordinati per i tuoi temi. La selezione copre i contenuti caricati dal browser; il punteggio non garantisce visibilità.'
+                      : 'Il raccoglitore deve essere acceso e collegato a LinkedIn. Configura il tuo server in Profilo per ricevere i post del feed.',
                   style: TextStyle(fontSize: 13),
                 ),
               ),
@@ -858,7 +862,7 @@ class _RadarPageState extends State<RadarPage> {
           onChanged: (v) => setState(() => query = v),
           decoration: const InputDecoration(
             prefixIcon: Icon(Icons.search),
-            hintText: 'Cerca nei post importati',
+            hintText: 'Cerca nei post',
           ),
         ),
         SwitchListTile(
@@ -878,7 +882,7 @@ class _RadarPageState extends State<RadarPage> {
           Empty(
             title: 'Trova la prossima conversazione',
             description:
-                'Porta qui i post che incontri nel feed. Il radar ti aiuta a scegliere quelli più vicini ai tuoi argomenti.',
+                'Il feed raccolto dal browser arriverà qui con una selezione per i tuoi argomenti. Controlla lo stato in Profilo.',
             icon: Icons.radar_rounded,
             action: OutlinedButton(
               onPressed: () => showImport(context, s, false),
@@ -900,6 +904,8 @@ class _RadarPageState extends State<RadarPage> {
                           Tag(
                             record.$1['source'] == 'example'
                                 ? 'ESEMPIO • NON REALE'
+                                : record.$1['source'] == 'linkedin_browser'
+                                ? 'DAL TUO FEED'
                                 : 'IMPORTATO',
                           ),
                           const SizedBox(height: 10),
@@ -977,16 +983,24 @@ class _RadarPageState extends State<RadarPage> {
                       onPressed: s.generating
                           ? null
                           : () => attempt(context, () async {
-                              final d = await s.generate(
-                                'comment',
-                                record.$1['text'],
-                                origin: record.$1,
-                              );
+                              final d = record.$1['draft'] is Map
+                                  ? <String, dynamic>{
+                                      ...Json.from(record.$1['draft']),
+                                      'id': 'browser-draft-${record.$1['id']}',
+                                      'kind': 'comment',
+                                      'url': record.$1['url'],
+                                      'source': record.$1['source'],
+                                      'state': 'bozza',
+                                      'expires_at': (record.$1['fetched_at'] as num) + 172800,
+                                    }
+                                  : await s.generate(
+                                      'comment', record.$1['text'], origin: record.$1,
+                                    );
                               if (context.mounted)
                                 await showDraft(context, s, d);
                             }),
                       icon: const Icon(Icons.auto_awesome, size: 17),
-                      label: const Text('Proponi commento'),
+                      label: Text(record.$1['draft'] is Map ? 'Leggi commento pronto' : 'Proponi commento'),
                     ),
                     OutlinedButton(
                       onPressed: () =>
@@ -1590,12 +1604,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   s.status['linkedin_connected'] == true,
                 ),
                 statusRow(
-                  'Permesso lettura dichiarato',
+                  s.status['mode'] == 'browser' ? 'Lettura commenti verificata' : 'Permesso lettura dichiarato',
                   s.status['comment_access'] == true,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Il permesso dichiarato viene verificato effettivamente alla prima lettura di un post.',
+                Text(
+                  s.status['mode'] == 'browser' ? 'La sessione deve restare attiva sul computer o server. Ultima lettura e copertura sono mostrate sotto.' : 'Il permesso dichiarato viene verificato effettivamente alla prima lettura di un post.',
                   style: TextStyle(color: muted, fontSize: 12),
                 ),
               ],
@@ -1611,8 +1625,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Il collegamento automatico richiede una app LinkedIn con permessi di lettura approvati. Il feed personale resta escluso. Il server controlla i post registrati anche quando Voce è chiusa; l’app aggiorna la coda quando è aperta.',
+              Text(
+                s.status['mode'] == 'api' ? 'La modalità API richiede permessi LinkedIn già approvati.' : 'Il browser dedicato raccoglie i tuoi post, i commenti e il feed sul computer o server. Voce riceve i risultati anche dopo che il telefono è rimasto chiuso. L’accesso iniziale e le verifiche di LinkedIn si completano nel browser.',
                 style: TextStyle(color: muted, fontSize: 13),
               ),
               const SizedBox(height: 12),
@@ -1621,7 +1635,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   s.status['error'],
                   style: const TextStyle(color: Colors.deepOrange),
                 ),
-              Wrap(
+              if (s.status['mode'] == 'browser') ...[
+                BrowserStatus(store: s),
+              ] else if (s.status['mode'] == 'api') Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
@@ -1675,7 +1691,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         : 'Ultima lettura: ${DateTime.fromMillisecondsSinceEpoch(((p['checked'] as num) * 1000).round()).toLocal().toString().substring(0, 16)}',
                     style: const TextStyle(fontSize: 11),
                   ),
-                  trailing: IconButton(
+                  trailing: s.status['mode'] == 'browser' ? null : IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => attempt(context, () async {
                       await s.api.call(
@@ -1688,8 +1704,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               const SizedBox(height: 10),
               Text(
-                s.status['auto_draft'] == true
-                    ? 'Bozze automatiche attive sul server (massimo 3 per ciclo).'
+                s.status['auto_draft'] == true && s.status['ai'] == true
+                    ? 'Preparazione automatica di risposte e commenti attiva sul server.'
                     : 'Bozze automatiche disattivate. Puoi attivarle sul server dopo aver configurato il servizio AI.',
                 style: const TextStyle(color: muted, fontSize: 12),
               ),
@@ -1706,7 +1722,7 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Archivio locale cifrato con Android Keystore. Contenuti letti dalle API: conservazione locale e server limitata a 48 ore. Bozze manuali e importazioni restano fino alla rimozione. Nessun tracciamento analitico.',
+                'Archivio locale cifrato con Android Keystore. Contenuti raccolti dal browser o dalle API: conservazione locale e server limitata a 48 ore. Bozze manuali e importazioni restano fino alla rimozione. Nessun tracciamento analitico.',
                 style: TextStyle(color: muted, fontSize: 13),
               ),
               const SizedBox(height: 8),
@@ -1841,4 +1857,37 @@ Future<void> registerDialog(BuildContext context, AppStore store) async {
   urn.dispose();
   body.dispose();
   url.dispose();
+}
+
+
+class BrowserStatus extends StatelessWidget {
+  final AppStore store;
+  const BrowserStatus({super.key, required this.store});
+  @override
+  Widget build(BuildContext context) {
+    final b = Json.from(store.status['browser'] as Map? ?? {});
+    final names = <String, String>{
+      'ready': 'Ultima raccolta riuscita', 'partial': 'Raccolta con copertura parziale',
+      'collecting': 'Lettura in corso', 'paused': 'Raccolta in pausa',
+      'blocked': 'LinkedIn richiede una verifica', 'login_required': 'Accedi nel browser sul computer',
+      'layout_changed': 'Contenuti non riconosciuti', 'wrong_profile': 'Controlla il profilo collegato',
+      'error': 'Raccolta interrotta', 'idle': 'Sessione pronta: avvia il raccoglitore',
+    };
+    final at = b['at'] as num?;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 12),
+      Text(names[b['state']] ?? 'In attesa del raccoglitore', style: const TextStyle(fontWeight: FontWeight.w700)),
+      if (at != null) Text('Ultimo aggiornamento: ${DateTime.fromMillisecondsSinceEpoch((at * 1000).round()).toLocal().toString().substring(0, 16)}', style: const TextStyle(fontSize: 12, color: muted)),
+      if (b['fresh'] == false) const Text('Il raccoglitore non comunica da tempo. Verifica che il computer o server sia acceso.', style: TextStyle(color: Colors.deepOrange, fontSize: 12)),
+      if (b['posts_count'] != null) Text('${b['posts_count']} post personali • ${b['feed_count']} post nel radar', style: const TextStyle(fontSize: 12)),
+      const SizedBox(height: 10),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        OutlinedButton.icon(onPressed: store.loading ? null : () => store.refresh(sync: true), icon: const Icon(Icons.sync), label: const Text('Richiedi lettura')),
+        TextButton(onPressed: () => attempt(context, () async {
+          await store.api.call('/v1/browser/control', data: {'enabled': b['enabled'] == false});
+          await store.refresh();
+        }), child: Text(b['enabled'] == false ? 'Riprendi raccolta' : 'Metti in pausa')),
+      ]),
+    ]);
+  }
 }

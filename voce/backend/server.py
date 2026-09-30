@@ -1,6 +1,6 @@
 """Voce: single-user API, Python 3.11+, standard library only.
 
-No scraping, no LinkedIn write endpoints. Bind behind HTTPS for remote access.
+Optional read-only browser collector; no LinkedIn write endpoints. Bind behind HTTPS for remote access.
 """
 from __future__ import annotations
 import hashlib
@@ -100,6 +100,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS posts(urn TEXT PRIMARY KEY, text TEXT NOT NULL, url TEXT NOT NULL, error TEXT DEFAULT '', checked REAL);
             CREATE TABLE IF NOT EXISTS comments(id TEXT PRIMARY KEY, post_urn TEXT NOT NULL, payload TEXT NOT NULL, fetched REAL NOT NULL, done INTEGER DEFAULT 0, draft TEXT);
             CREATE TABLE IF NOT EXISTS oauth(state TEXT PRIMARY KEY, created REAL NOT NULL);
+            CREATE TABLE IF NOT EXISTS radar(id TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched REAL NOT NULL, draft TEXT);
+            CREATE TABLE IF NOT EXISTS browser_seen(id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, done INTEGER DEFAULT 0, seen REAL NOT NULL);
             """)
         os.chmod(self.path, 0o600)
 
@@ -127,6 +129,8 @@ class Store:
         with self.db() as db:
             db.execute("DELETE FROM comments WHERE fetched < ?", (time.time() - 48 * 3600,))
             db.execute("DELETE FROM oauth WHERE created < ?", (time.time() - 600,))
+            db.execute("DELETE FROM radar WHERE fetched < ?", (time.time() - 48 * 3600,))
+            db.execute("DELETE FROM browser_seen WHERE seen < ?", (time.time() - 30 * 86400,))
 
 
 class Service:
@@ -160,7 +164,7 @@ class Service:
         self.store.purge()
         with self.store.db() as db:
             posts = [dict(r) for r in db.execute("SELECT * FROM posts ORDER BY urn")]
-        return {
+        result = {
             "ai": bool(self.env.get("OPENAI_API_KEY") and self.env.get("OPENAI_MODEL")),
             "linkedin_connected": bool(self.token()),
             "comment_access": bool(self.token() and self.scopes() & READ_SCOPES),
@@ -173,6 +177,118 @@ class Service:
             "auto_draft": self.env.get("AUTO_DRAFT", "false").lower() == "true",
             "notice": "Lettura dei commenti subordinata ai permessi concessi da LinkedIn. Il feed personale non è disponibile: importa i post da valutare.",
         }
+
+
+        result['mode'] = self.env.get('LINKEDIN_MODE', 'api')
+        result['radar_supported'] = True
+        if result['mode'] == 'browser':
+            state = self.store.get('browser_state', {})
+            control = self.store.get('browser_control', {})
+            interval = max(900, int(self.env.get('POLL_SECONDS', '900')))
+            fresh = time.time() - state.get('at', 0) < 2 * interval + 300
+            running = state.get('state') in ('ready', 'partial', 'collecting') and fresh and control.get('enabled', True)
+            result.update({
+                'browser': {**state, 'fresh':fresh, 'enabled':control.get('enabled', True)},
+                'linkedin_connected':running,
+                'comment_access':running and bool(state.get('comments_read', False)),
+                'feed_access':running and bool(state.get('feed_count', 0)),
+                'last_poll':state.get('at'),
+                'error':' '.join(filter(None, [state.get('message', ''), self.worker_error])),
+                'notice':'La raccolta usa un browser dedicato sul tuo computer o server. Richiede una sessione LinkedIn attiva. Sono raccolti solo i contenuti caricati; nessuna garanzia di copertura completa.',
+            })
+        return result
+
+    def ingest_browser(self, own_posts, comments, feed, own_profile, warnings):
+        # Internal entry point, deliberately not exposed as a public ingestion API.
+        import sys
+        sys.path.insert(0, str(ROOT.parent))
+        from browser.support import identity, post_url, fingerprint, score_post
+        own = identity(own_profile)
+        if not own or identity(self.env.get('LINKEDIN_PROFILE_URL', '')) != own:
+            raise Problem('Profilo del raccoglitore non valido.')
+        now = time.time()
+        posts = {}
+        for row in own_posts[:20]:
+            if identity(row.get('author_url')) != own: continue
+            urn = text_field(row, 'id', 100, True)
+            url = post_url(urn)
+            posts[urn] = {**row, 'text':text_field(row, 'text', 18000, True), 'url':url}
+        prepared_comments = []
+        for row in comments[:500]:
+            if row.get('post_id') not in posts: continue
+            author_url = identity(row.get('author_url'))
+            if author_url == own: continue
+            cid = 'browser:' + text_field(row, 'id', 250, True)
+            post = posts[row['post_id']]
+            item = {
+                'id':cid, 'author':text_field(row, 'author', 300, True),
+                'author_url':author_url, 'text':text_field(row,'text',18000,True),
+                'parent_post':post['text'], 'parent_comment':text_field(row,'parent_comment',18000),
+                'url':post['url'], 'source':'linkedin_browser', 'fetched_at':now,
+                'already_replied':row.get('already_replied') is True,
+            }
+            prepared_comments.append((row['post_id'], item))
+        prepared_feed = []
+        interests = self.store.get('profile', {}).get('interests', ['sanità','infermier','healthtech','intelligenza artificiale','ai','nutrizione','software'])
+        for row in feed[:50]:
+            if row.get('sponsored') or identity(row.get('author_url')) == own: continue
+            urn = text_field(row, 'id', 100, True)
+            item = {k:row.get(k) for k in ('published_at','comments_count','date_approximate','age_label')}
+            item.update(id='browser:'+urn, author=text_field(row,'author',300,True), author_url=identity(row.get('author_url')), text=text_field(row,'text',18000,True), url=post_url(urn), source='linkedin_browser', fetched_at=now)
+            item['editorial_score'] = score_post(item, interests)
+            prepared_feed.append(item)
+        if not posts or not prepared_feed:
+            raise Problem('Raccolta incompleta: mancano post personali o feed.')
+        self.store.purge()
+        with self.store.db() as db:
+            for urn, post in posts.items():
+                db.execute("INSERT INTO posts(urn,text,url,checked,error) VALUES(?,?,?,?,?) ON CONFLICT(urn) DO UPDATE SET text=excluded.text,url=excluded.url,checked=excluded.checked,error=excluded.error", (urn,post['text'],post['url'],now,'' if post.get('comments_complete') else 'Lettura parziale del thread'))
+            for urn, item in prepared_comments:
+                cid = item['id']
+                fp = fingerprint(item)
+                seen = db.execute('SELECT * FROM browser_seen WHERE id=?',(cid,)).fetchone()
+                old = db.execute('SELECT * FROM comments WHERE id=?',(cid,)).fetchone()
+                changed = seen and seen['fingerprint'] != fp
+                done = bool(item['already_replied'] or (seen and seen['done'] and not changed))
+                if old:
+                    old_payload = json.loads(old['payload'])
+                    item['fetched_at'] = now if changed else old_payload['fetched_at']
+                    db.execute('UPDATE comments SET payload=?,fetched=?,done=?,draft=CASE WHEN ? THEN NULL ELSE draft END WHERE id=?',(json.dumps(item),item['fetched_at'],done,bool(changed),cid))
+                elif not seen or changed:
+                    db.execute('INSERT INTO comments(id,post_urn,payload,fetched,done) VALUES(?,?,?,?,?)',(cid,urn,json.dumps(item),now,done))
+                db.execute('INSERT OR REPLACE INTO browser_seen VALUES(?,?,?,?)',(cid,fp,done,now))
+            for item in prepared_feed:
+                old = db.execute('SELECT * FROM radar WHERE id=?',(item['id'],)).fetchone()
+                changed = old and json.loads(old['payload'])['text'] != item['text']
+                item['fetched_at'] = now if not old or changed else old['fetched']
+                db.execute('INSERT INTO radar(id,payload,fetched) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,fetched=excluded.fetched,draft=CASE WHEN ? THEN NULL ELSE radar.draft END',(item['id'],json.dumps(item),item['fetched_at'],bool(changed)))
+            # Browser-discovered posts are bounded, never an unbounded archive.
+            db.execute("DELETE FROM posts WHERE urn IN (SELECT urn FROM posts WHERE urn LIKE 'urn:li:activity:%' ORDER BY checked DESC LIMIT -1 OFFSET 20)")
+        self.store.set('browser_state', {'state':'partial' if warnings else 'ready','at':now,'posts_count':len(posts),'comments_count':len(prepared_comments),'feed_count':len(prepared_feed),'comments_read':bool(prepared_comments) or any(p.get('comments_complete') for p in posts.values()),'message':' '.join(warnings)[:1500], 'warnings':warnings[:10]})
+        self.store.set('browser_profile', own)
+
+    def radar(self):
+        self.store.purge()
+        with self.store.db() as db:
+            rows = db.execute('SELECT * FROM radar ORDER BY fetched DESC LIMIT 200').fetchall()
+        return {'items':[{**json.loads(r['payload']), 'draft':json.loads(r['draft']) if r['draft'] else None} for r in rows]}
+
+    def auto_radar(self):
+        profile = self.store.get('profile', {})
+        if not profile.get('profile') or not profile.get('voice'): return
+        items = sorted(self.radar()['items'], key=lambda p:p.get('editorial_score',0), reverse=True)
+        for item in [p for p in items if not p['draft'] and p.get('editorial_score',0) >= 45][:3]:
+            try:
+                draft = self.generate({**profile,'kind':'comment','text':item['text']})
+                with self.store.db() as db:
+                    # Do not attach a stale draft if the collector edited the post meanwhile.
+                    old = db.execute('SELECT payload FROM radar WHERE id=?',(item['id'],)).fetchone()
+                    if old and json.loads(old['payload'])['text'] == item['text']:
+                        db.execute('UPDATE radar SET draft=? WHERE id=?',(json.dumps(draft),item['id']))
+            except Problem as exc:
+                self.worker_error = str(exc)
+                break
+            if self.stop_event.wait(2.1): break
 
     def generate(self, data):
         key = self.env.get("OPENAI_API_KEY")
@@ -260,6 +376,19 @@ class Service:
         raise Problem("Questo thread supera il limite di 2.000 commenti per sincronizzazione. Restringi il monitoraggio.", 422)
 
     def sync(self, manual=False):
+        if self.env.get('LINKEDIN_MODE') == 'browser':
+            with self.lock:
+                if manual and time.monotonic() - self.last_manual_sync < 60:
+                    raise Problem('Attendi un minuto prima di aggiornare di nuovo.',429)
+                self.last_manual_sync = time.monotonic()
+                state = self.store.get('browser_state',{})
+                if state.get('state') in ('blocked','login_required','wrong_profile'):
+                    raise Problem(state.get('message','Apri il browser sul computer per completare l’accesso.'),409)
+                control = self.store.get('browser_control',{})
+                if control.get('enabled',True) is False:
+                    raise Problem('La raccolta è in pausa. Riattivala in Profilo.',409)
+                self.store.set('browser_control',{**control,'request':time.time()})
+                return {'queued':True,'errors':[],'message':'Richiesta inviata. Verrà eseguita dal raccoglitore, se è acceso.'}
         if not self.token() or not self.scopes() & READ_SCOPES:
             raise Problem("LinkedIn non autorizzato alla lettura dei commenti. Verifica i permessi nel portale sviluppatori.", 403)
         if not self.lock.acquire(blocking=False):
@@ -325,13 +454,20 @@ class Service:
         if not profile.get("profile") or not profile.get("voice"):
             return
         with self.store.db() as db:
-            todo = [dict(r) for r in db.execute("SELECT * FROM comments WHERE done=0 AND draft IS NULL ORDER BY fetched DESC LIMIT 3")]
+            todo = [dict(r) for r in db.execute("SELECT * FROM comments WHERE done=0 AND draft IS NULL ORDER BY fetched DESC LIMIT 200")]
+        prepared = 0
         for row in todo:
+            if prepared >= 3: break
             item = json.loads(row["payload"])
+            if re.fullmatch(r"https?://\S+", item["text"].strip()):
+                continue  # A link alone is not enough context for a meaningful reply.
+            prepared += 1
             try:
                 draft = self.generate({**profile, "kind": "reply", "text": item["text"], "parent_post": item["parent_post"], "instruction": "Replica precedente: " + item.get("parent_comment", "")})
                 with self.store.db() as db:
-                    db.execute("UPDATE comments SET draft=? WHERE id=?", (json.dumps(draft), row["id"]))
+                    old = db.execute('SELECT payload FROM comments WHERE id=?',(row['id'],)).fetchone()
+                    if old and old['payload'] == row['payload']:
+                        db.execute("UPDATE comments SET draft=? WHERE id=?", (json.dumps(draft), row["id"]))
             except Problem as exc:
                 self.worker_error = str(exc)
                 break
@@ -383,14 +519,26 @@ class Service:
     def dispatch(self, method, path, data):
         if method == "GET" and path == "/v1/status":
             return self.status()
+        if method == "GET" and path == "/v1/radar":
+            return self.radar()
         if method == "GET" and path == "/v1/inbox":
             return self.inbox()
         if method != "POST":
             raise Problem("Percorso non disponibile.", 404)
+        if path == '/v1/browser/control':
+            if self.env.get('LINKEDIN_MODE') != 'browser' or not isinstance(data.get('enabled'),bool):
+                raise Problem('Comando browser non valido.')
+            control = self.store.get('browser_control',{})
+            self.store.set('browser_control',{**control,'enabled':data['enabled']})
+            return {'ok':True}
         if path == "/v1/generate":
             return self.generate(data)
         if path == "/v1/profile":
             profile = {k: text_field(data, k, 10000 if k == "examples" else 6000, k in ("profile", "voice")) for k in ("profile", "voice", "examples")}
+            interests = data.get('interests', [])
+            if not isinstance(interests,list) or len(interests)>40 or any(not isinstance(x,str) or len(x)>120 for x in interests):
+                raise Problem('Temi non validi.')
+            profile['interests'] = interests
             self.store.set("profile", profile)
             return {"ok": True}
         if path == "/v1/posts":
@@ -404,6 +552,7 @@ class Service:
             return self.sync(manual=True)
         if path == "/v1/inbox/update":
             with self.store.db() as db:
+                db.execute('UPDATE browser_seen SET done=? WHERE id=?',(1 if data.get('done') else 0,data.get('id')))
                 changed = db.execute("UPDATE comments SET done=? WHERE id=?", (1 if data.get("done") else 0, data.get("id"))).rowcount
             if not changed:
                 raise Problem("Commento non trovato o scaduto.", 404)
@@ -411,6 +560,10 @@ class Service:
         if path == "/v1/oauth/start":
             return self.oauth_start()
         if path == "/v1/disconnect":
+            if self.env.get('LINKEDIN_MODE') == 'browser':
+                self.store.set('browser_control',{'enabled':False})
+                self.store.set('browser_state',{'state':'paused','at':time.time(),'message':'Raccolta sospesa. Per uscire da LinkedIn, usa il browser sul computer.'})
+                return {'ok':True}
             if self.env.get("LINKEDIN_ACCESS_TOKEN"):
                 raise Problem("Rimuovi LINKEDIN_ACCESS_TOKEN dall'ambiente del server per scollegarlo.")
             with self.lock:
@@ -425,6 +578,15 @@ class Service:
         interval = max(300, int(self.env.get("POLL_SECONDS", "900")))
         while not self.stop_event.is_set():
             self.store.purge()
+            if self.env.get('LINKEDIN_MODE') == 'browser':
+                if self.env.get('AUTO_DRAFT','false').lower() == 'true' and self.status()['ai']:
+                    try:
+                        self.auto_draft()
+                        self.auto_radar()
+                    except Exception:
+                        self.worker_error = 'Generazione automatica interrotta. Controlla la configurazione AI.'
+                self.stop_event.wait(60 if not self.worker_error else 300)
+                continue
             if self.token() and self.scopes() & READ_SCOPES:
                 try:
                     self.sync()

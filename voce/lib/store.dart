@@ -7,7 +7,8 @@ import 'domain.dart';
 import 'platform_services.dart';
 
 class AppStore extends ChangeNotifier {
-  final Api api = Api();
+  final Api api;
+  AppStore({Api? api}) : api = api ?? Api();
   String profile = profileSeed;
   String voice = voiceSeed;
   String examples = '';
@@ -33,6 +34,8 @@ class AppStore extends ChangeNotifier {
   bool _closed = false;
   Timer? timer;
   Future<void> _saveQueue = Future.value();
+
+  bool remoteItem(Json item) => ['linkedin_api', 'linkedin_browser'].contains(item['source']);
 
   Future<void> init() async {
     try {
@@ -73,9 +76,10 @@ class AppStore extends ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch / 1000;
     comments.removeWhere(
       (c) =>
-          c['source'] == 'linkedin_api' &&
+          remoteItem(c) &&
           now - (c['fetched_at'] as num? ?? 0) >= 172800,
     );
+    posts.removeWhere((p) => p['source'] == 'linkedin_browser' && now - (p['fetched_at'] as num? ?? 0) >= 172800);
     drafts.removeWhere(
       (d) => d['expires_at'] is num && (d['expires_at'] as num) <= now,
     );
@@ -129,9 +133,16 @@ class AppStore extends ChangeNotifier {
       final inbox = await api.call('/v1/inbox');
       final items = (inbox['items'] as List).map((x) => Json.from(x)).toList();
       comments = [
-        ...comments.where((x) => x['source'] != 'linkedin_api'),
+        ...comments.where((x) => !remoteItem(x)),
         ...items,
       ];
+      if (status['radar_supported'] == true) {
+        final radar = await api.call('/v1/radar');
+        posts = [
+          ...posts.where((x) => x['source'] != 'linkedin_browser'),
+          ...(radar['items'] as List).map((x) => Json.from(x)),
+        ];
+      }
       purge();
       await save();
     } catch (e) {
@@ -165,13 +176,14 @@ class AppStore extends ChangeNotifier {
     interests = topics.where((x) => x.trim().isNotEmpty).toList();
     if (changedServer) {
       status = {};
-      comments.removeWhere((x) => x['source'] == 'linkedin_api');
+      comments.removeWhere(remoteItem);
+      posts.removeWhere((x) => x['source'] == 'linkedin_browser');
     }
     await save();
     if (api.configured) {
       await api.call(
         '/v1/profile',
-        data: {'profile': profile, 'voice': voice, 'examples': examples},
+        data: {'profile': profile, 'voice': voice, 'examples': examples, 'interests': interests},
       );
       await refresh();
     }
@@ -216,8 +228,8 @@ class AppStore extends ChangeNotifier {
         'origin_id': origin?['id'],
         'source': origin?['source'] ?? 'manual',
       };
-      if (origin?['source'] == 'linkedin_api')
-        draft['expires_at'] = (origin!['fetched_at'] as num) + 172800;
+      if (origin != null && remoteItem(origin))
+        draft['expires_at'] = (origin['fetched_at'] as num) + 172800;
       drafts.insert(0, draft);
       await save();
       return draft;
@@ -244,7 +256,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> mark(Json item, bool done) async {
-    if (item['source'] == 'linkedin_api')
+    if (remoteItem(item))
       await api.call(
         '/v1/inbox/update',
         data: {'id': item['id'], 'done': done},

@@ -32,25 +32,27 @@ jobs:
       - name: Analyze Flutter sources
         run: flutter analyze
       - name: Test interface and persistence
-        run: flutter test test/widget_test.dart --reporter expanded
+        run: flutter test --reporter expanded
       - name: Test ranking and backend
         run: |
           dart test/domain_smoke.dart
           cd backend
-          python3 -m unittest -v test_server.py
+          python3 -m unittest discover -p 'test*.py' -v
+          python3 -m py_compile ../browser/*.py
+          node --check ../browser/extract.js
       - name: Build optimized ARM64 APK
         run: |
           flutter build apk --release --target-platform android-arm64
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Voce-0.1.1-Android-arm64.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Voce-0.2.0-Android-arm64.apk
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
-          "$BT/apksigner" verify --verbose --print-certs dist/Voce-0.1.1-Android-arm64.apk > dist/signature-verification.txt
-          "$BT/aapt" dump badging dist/Voce-0.1.1-Android-arm64.apk > dist/apk-info.txt
+          "$BT/apksigner" verify --verbose --print-certs dist/Voce-0.2.0-Android-arm64.apk > dist/signature-verification.txt
+          "$BT/aapt" dump badging dist/Voce-0.2.0-Android-arm64.apk > dist/apk-info.txt
       - name: Upload APK and verification
         uses: actions/upload-artifact@v4
         with:
-          name: Voce-0.1.1-Android-arm64
+          name: Voce-0.2.0-Android-arm64
           path: voce/dist/
           if-no-files-found: error
           retention-days: 30
