@@ -146,12 +146,17 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'voce',
-              style: TextStyle(
-                fontSize: 27,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1,
+            const Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'voce',
+                  style: TextStyle(
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                  ),
+                ),
               ),
             ),
           ],

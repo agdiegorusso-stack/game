@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 // This is a basic Flutter widget test.
 //
 // To perform an interaction with a widget in your test, use the WidgetTester
@@ -15,6 +18,21 @@ import 'package:voce_linkedin/platform_services.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    final root = Platform.environment['FLUTTER_ROOT'];
+    if (root == null) return;
+    for (final entry in {
+      'Roboto': 'Roboto-Regular.ttf',
+      'MaterialIcons': 'MaterialIcons-Regular.otf',
+    }.entries) {
+      final file = File('$root/bin/cache/artifacts/material_fonts/${entry.value}');
+      if (await file.exists()) {
+        final loader = FontLoader(entry.key);
+        loader.addFont(file.readAsBytes().then(ByteData.sublistView));
+        await loader.load();
+      }
+    }
+  });
   final saved = <String, String>{};
   setUp(() {
     saved.clear();
@@ -69,6 +87,11 @@ void main() {
     await tester.ensureVisible(find.widgetWithText(FilledButton, 'Aggiungi'));
     await tester.tap(find.widgetWithText(FilledButton, 'Aggiungi'));
     await tester.pumpAndSettle();
+    final post = (jsonDecode(saved['workspace']!)['posts'] as List).single;
+    expect(post['author'], 'Autore test');
+    expect(post['text'], 'Un software per infermieri deve partire dalle attività concrete.');
+    await tester.scrollUntilVisible(find.text('Autore test'), 250,
+      scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first);
     expect(find.text('Autore test'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -76,6 +99,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Radar'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Autore test'), 250,
+      scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first);
     expect(find.text('Autore test'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
